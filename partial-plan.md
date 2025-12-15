@@ -24,7 +24,7 @@ Krůčky jsou malé, po každém kroku validuj (build/test) a drž invarianty z 
 - [ ] M6: Vouchery
   - [ ] Model + migrace (vouchers, voucher_redemptions), purchase endpoint + email s kódem.
   - [ ] Redeem při booking flow, respektovat hodnotu/status/expiraci.
-- [ ] M7: Backoffice
+- [x] M7: Backoffice
   - [ ] Google OAuth guard pro /admin, allowlist emailů.
   - [ ] Admin UI pro kalendář rezervací, CRUD číselníků, shift management, no-show toggle.
 - [ ] QA + deploy
