@@ -25,8 +25,8 @@ Krůčky jsou malé, po každém kroku validuj (build/test) a drž invarianty z 
   - [ ] Model + migrace (vouchers, voucher_redemptions), purchase endpoint + email s kódem.
   - [ ] Redeem při booking flow, respektovat hodnotu/status/expiraci.
 - [ ] M7: Backoffice
-  - [ ] Google OAuth guard pro /(admin), allowlist emailů.
+  - [ ] Google OAuth guard pro /admin, allowlist emailů.
   - [ ] Admin UI pro kalendář rezervací, CRUD číselníků, shift management, no-show toggle.
 - [ ] QA + deploy
   - [ ] E2E průchod public booking + voucher redeem, test branch timezone edge cases.
-  - [ ] Deploy skript (Vercel + DB), kontrola env/secrets.
+  - [ ] Deploy skript (GCP + DB), kontrola env/secrets.
