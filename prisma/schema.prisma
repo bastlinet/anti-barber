@@ -6,3 +6,49 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+model Branch {
+  id               String   @id @default(uuid())
+  name             String
+  slug             String   @unique
+  address          String
+  city             String
+  lat              Float?
+  lng              Float?
+  phone            String
+  email            String
+  timezone         String   @default("Europe/Prague")
+  bookingBufferMin Int      @default(30) // min time before booking
+  slotStepMin      Int      @default(30) // reservation grid step (e.g. 30min slots)
+  maxDaysAhead     Int      @default(30) // how far in future customers can book
+  allowPayOnSite   Boolean  @default(true)
+  allowPayOnline   Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  services BranchService[]
+}
+
+model Service {
+  id          String   @id @default(uuid())
+  name        String
+  category    String // e.g. "Vlasy", "Vousy", "Komplet"
+  durationMin Int
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  branches BranchService[]
+}
+
+model BranchService {
+  branchId   String
+  serviceId  String
+  priceCents Int // price in lowest currency unit (e.g. haléře/cents)
+  active     Boolean @default(true)
+  branch     Branch  @relation(fields: [branchId], references: [id])
+  service    Service @relation(fields: [serviceId], references: [id])
+
+  @@id([branchId, serviceId])
+}
