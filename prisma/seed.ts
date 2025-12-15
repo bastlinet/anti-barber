@@ -45,24 +45,34 @@ async function main() {
     },
   ]
 
-  for (const s of serviceData) {
-    const service = await prisma.service.create({
-      data: {
-        name: s.name,
-        category: s.category,
-        durationMin: s.durationMin,
-        description: s.description,
-        branches: {
-          create: {
-            branchId: branch.id,
-            priceCents: s.priceCents,
-          },
-        },
-      },
-    })
-    console.log(`Created service with id: ${service.id}`)
-  }
 
+  const services = await prisma.service.findMany({ where: { active: true } });
+
+  // Create Staff: "Ondra - Senior Barber"
+  const staff = await prisma.staff.create({
+    data: {
+      branchId: branch.id,
+      name: 'Ondra',
+      active: true,
+      services: {
+        create: services.map(s => ({
+            serviceId: s.id,
+            active: true
+        }))
+      },
+      shifts: {
+        create: [
+            {
+                branchId: branch.id,
+                startAt: new Date(new Date().setUTCHours(8, 0, 0, 0)).toISOString(), // Today 8:00 UTC
+                endAt: new Date(new Date().setUTCHours(16, 0, 0, 0)).toISOString()   // Today 16:00 UTC
+            }
+        ]
+      }
+    }
+  })
+
+  console.log(`Created staff: ${staff.name}`)
   console.log('Seeding finished.')
 }
 

@@ -27,6 +27,9 @@ model Branch {
   updatedAt        DateTime @updatedAt
 
   services BranchService[]
+  staff    Staff[]
+  shifts   Shift[]
+  breaks   Break[]
 }
 
 model Service {
@@ -40,6 +43,7 @@ model Service {
   updatedAt   DateTime @updatedAt
 
   branches BranchService[]
+  staff    StaffService[]
 }
 
 model BranchService {
@@ -50,5 +54,68 @@ model BranchService {
   branch     Branch  @relation(fields: [branchId], references: [id])
   service    Service @relation(fields: [serviceId], references: [id])
 
+
   @@id([branchId, serviceId])
+}
+
+model Staff {
+  id        String   @id @default(uuid())
+  branchId  String
+  name      String
+  email     String?  // for admin login later
+  phone     String?
+  active    Boolean  @default(true)
+  avatarUrl String?
+  
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  services  StaffService[]
+  shifts    Shift[]
+  breaks    Break[]
+  timeOff   TimeOff[]
+}
+
+model StaffService {
+  staffId   String
+  serviceId String
+  active    Boolean @default(true) // Helper to temporarily disable service for stats
+  staff     Staff   @relation(fields: [staffId], references: [id])
+  service   Service @relation(fields: [serviceId], references: [id])
+
+  @@id([staffId, serviceId])
+}
+
+model Shift {
+  id        String   @id @default(uuid())
+  staffId   String
+  branchId  String // Denormalized for faster query
+  startAt   DateTime // UTC
+  endAt     DateTime // UTC
+  
+  staff     Staff    @relation(fields: [staffId], references: [id])
+  branch    Branch   @relation(fields: [branchId], references: [id])
+
+  @@index([staffId, startAt])
+  @@index([branchId, startAt])
+}
+
+model Break {
+  id        String   @id @default(uuid())
+  staffId   String
+  branchId  String
+  startAt   DateTime // UTC
+  endAt     DateTime // UTC
+  
+  staff     Staff    @relation(fields: [staffId], references: [id])
+  branch    Branch   @relation(fields: [branchId], references: [id])
+}
+
+model TimeOff {
+  id        String   @id @default(uuid())
+  staffId   String
+  startAt   DateTime // UTC
+  endAt     DateTime // UTC
+  reason    String?
+  approved  Boolean  @default(true)
+  
+  staff     Staff    @relation(fields: [staffId], references: [id])
 }
