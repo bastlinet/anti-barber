@@ -29,7 +29,10 @@ model Branch {
   services BranchService[]
   staff    Staff[]
   shifts   Shift[]
-  breaks   Break[]
+  breaks       Break[]
+  bookings     Booking[]
+  bookingHolds BookingHold[]
+  vouchers     Voucher[]
 }
 
 model Service {
@@ -42,8 +45,11 @@ model Service {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  branches BranchService[]
-  staff    StaffService[]
+  branches     BranchService[]
+  staff        StaffService[]
+  bookings     Booking[]
+  bookingHolds BookingHold[]
+  vouchers     Voucher[]
 }
 
 model BranchService {
@@ -70,8 +76,10 @@ model Staff {
   branch    Branch   @relation(fields: [branchId], references: [id])
   services  StaffService[]
   shifts    Shift[]
-  breaks    Break[]
-  timeOff   TimeOff[]
+  breaks   Break[]
+  timeOff  TimeOff[]
+  bookings Booking[]
+  bookingHolds BookingHold[]
 }
 
 model StaffService {
@@ -118,4 +126,103 @@ model TimeOff {
   approved  Boolean  @default(true)
   
   staff     Staff    @relation(fields: [staffId], references: [id])
+}
+
+model Booking {
+  id               String    @id @default(uuid())
+  branchId         String
+  staffId          String
+  serviceId        String
+  startAt          DateTime  // UTC
+  endAt            DateTime  // UTC
+  
+  customerName     String
+  customerEmail    String
+  customerPhone    String
+  note             String?
+  
+  status           BookingStatus @default(CONFIRMED)
+  createdAt        DateTime  @default(now())
+  cancelledAt      DateTime?
+  
+  paymentStatus    PaymentStatus @default(PENDING)
+  paymentIntentId  String?
+  
+  voucherRedemption VoucherRedemption?
+
+  branch   Branch  @relation(fields: [branchId], references: [id])
+  staff    Staff   @relation(fields: [staffId], references: [id])
+  service  Service @relation(fields: [serviceId], references: [id])
+
+  @@index([staffId, startAt])
+  @@index([branchId, startAt])
+}
+
+model BookingHold {
+  id               String   @id @default(uuid())
+  branchId         String
+  staffId          String
+  serviceId        String
+  startAt          DateTime // UTC
+  endAt            DateTime // UTC
+  expiresAt        DateTime // UTC
+  clientFingerprint String? // Session ID or similar
+
+  branch   Branch  @relation(fields: [branchId], references: [id])
+  staff    Staff   @relation(fields: [staffId], references: [id])
+  service  Service @relation(fields: [serviceId], references: [id])
+
+  @@index([staffId, startAt])
+  @@index([expiresAt])
+}
+
+model Voucher {
+  id               String   @id @default(uuid())
+  branchId         String
+  serviceId        String
+  code             String   @unique
+  status           VoucherStatus @default(ACTIVE)
+  priceCents       Int
+  purchasedAt      DateTime @default(now())
+  expiresAt        DateTime
+  
+  purchaserEmail   String
+  recipientName    String?
+  stripePaymentIntentId String?
+
+  redemption       VoucherRedemption?
+  
+  branch   Branch  @relation(fields: [branchId], references: [id])
+  service  Service @relation(fields: [serviceId], references: [id])
+}
+
+model VoucherRedemption {
+  id         String   @id @default(uuid())
+  voucherId  String   @unique
+  bookingId  String   @unique
+  redeemedAt DateTime @default(now())
+
+  voucher    Voucher  @relation(fields: [voucherId], references: [id])
+  booking    Booking  @relation(fields: [bookingId], references: [id])
+}
+
+enum BookingStatus {
+  HOLD
+  CONFIRMED
+  CANCELLED
+  NO_SHOW
+  COMPLETED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  REFUNDED
+}
+
+enum VoucherStatus {
+  ACTIVE
+  REDEEMED
+  EXPIRED
+  REFUNDED
 }

@@ -2,22 +2,22 @@
 
 Krůčky jsou malé, po každém kroku validuj (build/test) a drž invarianty z AGENTS.md.
 
-- [ ] M0: Repo skeleton
-  - [ ] Nastavit základní Next.js + TS config, lint, env (.env.example) a CI stub.
-  - [ ] Přidat .gitignore, scripts (dev/build/test/lint/prisma) a placeholder root layout/page.
-  - [ ] Připravit Prisma datasource a prázdné schema, ověřit `pnpm lint`.
-- [ ] M1: Číselníky
-  - [ ] Doplnit Prisma modely pro branches/services/branch_services + migrační skript.
-  - [ ] Seeder/demo data (1 pobočka, pár služeb) + read-only API routes.
-- [ ] M2: Staff + směny
-  - [ ] Přidat staff/staff_services/shifts/breaks/time_off modely + migrace.
-  - [ ] Serverové validace (Zod) pro CRUD endpoints/actions, základní admin UI formy.
-- [ ] M3: Availability engine
-  - [ ] Implementovat `listAvailableSlots` v /lib/availability + unit testy (overlap, buffer, break/timeoff, přes půlnoc, DST, any-staff).
-  - [ ] API `/api/availability` (Zod vstupy, UTC in/out), zahrnout booking_holds.
-- [ ] M4: Booking bez platby
-  - [ ] Endpoint `/api/booking/hold` (transakce + expirace), `/api/booking/confirm` bez Stripe.
-  - [ ] Email potvrzení (Resend stub/template) + jednoduché public UI kroky rezervace.
+- [x] M0: Repo skeleton
+  - [x] Nastavit základní Next.js + TS config, lint, env (.env.example) a CI stub.
+  - [x] Přidat .gitignore, scripts (dev/build/test/lint/prisma) a placeholder root layout/page.
+  - [x] Připravit Prisma datasource a prázdné schema, ověřit `pnpm lint`.
+- [x] M1: Číselníky
+  - [x] Doplnit Prisma modely pro branches/services/branch_services + migrační skript.
+  - [x] Seeder/demo data (1 pobočka, pár služeb) + read-only API routes.
+- [x] M2: Staff + směny
+  - [x] Přidat staff/staff_services/shifts/breaks/time_off modely + migrace.
+  - [x] Serverové validace (Zod) pro CRUD endpoints/actions, základní admin UI formy.
+- [x] M3: Availability engine
+  - [x] Implementovat `listAvailableSlots` v /lib/availability + unit testy (overlap, buffer, break/timeoff, přes půlnoc, DST, any-staff).
+  - [x] API `/api/availability` (Zod vstupy, UTC in/out), zahrnout booking_holds.
+- [x] M4: Booking bez platby
+  - [x] Endpoint `/api/booking/hold` (transakce + expirace), `/api/booking/confirm` bez Stripe.
+  - [x] Email potvrzení (Resend stub/template) + jednoduché public UI kroky rezervace.
 - [ ] M5: Stripe platby
   - [ ] Integrovat PaymentIntent pro booking + voucher, ukládat payment_intent_id.
   - [ ] Webhook handler idempotentní; hold → booking na succeeded, failure/cancel update status.

@@ -45,8 +45,32 @@ async function main() {
     },
   ]
 
+  for (const s of serviceData) {
+    await prisma.service.create({
+        data: {
+            name: s.name,
+            category: s.category,
+            durationMin: s.durationMin,
+            description: s.description,
+            active: true
+        }
+    })
+  }
 
-  const services = await prisma.service.findMany({ where: { active: true } });
+  // Link services to branch
+  const services = await prisma.service.findMany();
+  for (const s of services) {
+    const price = serviceData.find(d => d.name === s.name)?.priceCents || 0;
+    await prisma.branchService.create({
+        data: {
+            branchId: branch.id,
+            serviceId: s.id,
+            priceCents: price,
+            active: true
+        }
+    }).catch(() => {}) // Ignore if exists
+  }
+
 
   // Create Staff: "Ondra - Senior Barber"
   const staff = await prisma.staff.create({
