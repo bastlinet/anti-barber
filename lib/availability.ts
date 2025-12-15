@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
-import { addMinutes, areIntervalsOverlapping, format, isBefore, isSameDay, parseISO, startOfDay, endOfDay, setHours, setMinutes } from "date-fns";
+import { addMinutes, areIntervalsOverlapping, isBefore } from "date-fns";
+import { fromZonedTime, toZonedTime } from "date-fns-tz";
 
 // Types
 export interface AvailabilityQuery {
@@ -10,7 +11,7 @@ export interface AvailabilityQuery {
 }
 
 export interface TimeSlot {
-  start: string; // ISO string
+  start: string; // ISO string (UTC)
   staffId?: string; // The staff member available for this slot (if relevant)
 }
 
@@ -37,21 +38,17 @@ export async function listAvailableSlots({
   const durationMin = service.durationMin;
   const slotStepMin = branch.slotStepMin;
   const bufferMin = branch.bookingBufferMin; // Minimum time from NOW
+  const timezone = branch.timezone;
+
+  // 2. Define the range for the requested day in BRANCH timezone
+  // The input `date` is "YYYY-MM-DD" e.g. "2024-01-02"
+  // We identify 00:00:00 and 23:59:59 in the Branch's timezone, then convert to UTC.
   
-  // 2. Define the range for the requested day (UTC)
-  // Incoming date is "YYYY-MM-DD". We assume this is in the branch's timezone?
-  // Note: For MVP, let's assume the query date is the local date of the branch.
-  // We need to fetch everything that OVERLAPS with this day in UTC.
-  // Simple approach: fetched range = [start of day - 12h, end of day + 12h] to cover safe margins for all TZs.
-  // Better approach specifically: We need to know the bounds of "YYYY-MM-DD" in the Branch's Timezone.
-  // BUT the database stores specific UTC start/end for shifts.
-  
-  // Let's assume input date is the target DAY.
-  // We want to return slots starting on that day.
-  // We need to fetch shifts that cover that day.
-  
-  const queryDateStart = startOfDay(parseISO(date)); // 00:00 local time (system time? No, we should be careful about hydration)
-  const queryDateEnd = endOfDay(parseISO(date));
+  // NOTE: fromZonedTime takes a date string/object and treats it as being in the target timezone, returns UTC Date.
+  const queryDateStartUtc = fromZonedTime(`${date} 00:00:00`, timezone);
+  // We want to cover the full day.
+  // Actually simpler: iterate steps starting from queryDateStartUtc until ...
+  const queryDateEndUtc = fromZonedTime(`${date} 23:59:59.999`, timezone);
 
   // 3. Fetch Staff candidates
   // If staffId provided, check if valid and works at branch.
@@ -71,35 +68,35 @@ export async function listAvailableSlots({
     select: { id: true },
   });
 
-  const staffIds = staffCandidates.map((s) => s.id);
+  const staffIds = staffCandidates.map((s: { id: string }) => s.id);
   if (staffIds.length === 0) return [];
 
-  // 4. Fetch Shifts, Breaks, TimeOff, Bookings for these staff members
-  // We fetch a bit wider range to be safe (e.g. shifts starting previous day and spilling over).
-  // Actually, shifts are stored as absolute UTC.
-  // We want slots that START between queryDateStart and queryDateEnd (in UTC? No in Branch Time?).
-  // Let's stick to UTC for calculations. 
-  // We'll iterate through possible start times in the day and check availability.
+  // 4. Fetch Database Records (Shifts, etc)
+  // We fetch anything that overlaps with our [queryDateStartUtc, queryDateEndUtc]
+  // BUT shifts might start slightly before/after. 
+  // We are looking for slots that START within this day.
+  // A slot starting at 23:30 is valid. It ends tomorrow.
+  // We need to check availability for the duration of that slot.
+  // So we need shifts covering [queryDateStartUtc, queryDateEndUtc + duration]
+  // Let's broaden the fetch window slightly.
   
-  // Fetching data covering the day:
-  const dayStartUtc = queryDateStart; // simplistic, assumes server local time matches desired logic or we handle TZ elsewhere
-  const dayEndUtc = queryDateEnd;
+  const fetchStart = queryDateStartUtc; 
+  const fetchEnd = addMinutes(queryDateEndUtc, durationMin); // to cover the last slot's duration
 
-  // We need shifts that overlap with our target day
-  // To keep it robust, let's fetch shifts where startAt < dayEndUtc AND endAt > dayStartUtc
   const shifts = await prisma.shift.findMany({
     where: {
       staffId: { in: staffIds },
-      startAt: { lt: dayEndUtc },
-      endAt: { gt: dayStartUtc },
+      // Shift overlaps with fetch window
+      startAt: { lt: fetchEnd },
+      endAt: { gt: fetchStart },
     },
   });
 
   const breaks = await prisma.break.findMany({
     where: {
       staffId: { in: staffIds },
-      startAt: { lt: dayEndUtc },
-      endAt: { gt: dayStartUtc },
+      startAt: { lt: fetchEnd },
+      endAt: { gt: fetchStart },
     },
   });
 
@@ -107,8 +104,8 @@ export async function listAvailableSlots({
     where: {
       staffId: { in: staffIds },
       approved: true,
-      startAt: { lt: dayEndUtc },
-      endAt: { gt: dayStartUtc },
+      startAt: { lt: fetchEnd },
+      endAt: { gt: fetchStart },
     },
   });
 
@@ -124,8 +121,8 @@ export async function listAvailableSlots({
     where: {
       staffId: { in: staffIds },
       status: { in: busyStatuses as any }, 
-      startAt: { lt: dayEndUtc },
-      endAt: { gt: dayStartUtc },
+      startAt: { lt: fetchEnd },
+      endAt: { gt: fetchStart },
     },
   });
 
@@ -136,55 +133,34 @@ export async function listAvailableSlots({
     where: {
       staffId: { in: staffIds },
       expiresAt: { gt: now }, // still valid
-      startAt: { lt: dayEndUtc },
-      endAt: { gt: dayStartUtc },
+      startAt: { lt: fetchEnd },
+      endAt: { gt: fetchStart },
     },
   });
 
   // 5. Generate potential slots
-  // We step through the day in slotStepMin intervals.
-  // For each step, we define a proposed slot [t, t + durationMin].
-  // We check if ANY staff member is available for this WHOLE interval.
-  
-  // However, shifts define when they CAN work.
-  // We should iterate through SHIFTS instead of the generic day, to miss empty times?
-  // Or just grid the day? Gridding the day is safer for "list all slots".
-  
-  // But wait, if we grid 00:00 to 23:59, we might produce A LOT of slots.
-  // Usually we only care about times within shifts.
-  // Optimization: Collect all unique start/end times of shifts, and only scan inside those ranges?
-  // Simpler: iterate from earliest Shift Start to latest Shift End of the day?
-  
-  if (shifts.length === 0) return [];
-
-  // Find overall min/max bounds from shifts (clamped to the requested day)
-  let minStart = dayEndUtc.getTime();
-  let maxEnd = dayStartUtc.getTime();
-
-  for (const s of shifts) {
-    if (s.startAt.getTime() < minStart) minStart = s.startAt.getTime();
-    if (s.endAt.getTime() > maxEnd) maxEnd = s.endAt.getTime();
-  }
-  
-  // Clamp to day boundaries if needed, but usually we just want to follow shifts.
-  // If a shift started yesterday 22:00 and ends today 06:00, we show slots until 06:00.
-  // Ideally we filter slots that START on the requested `date`.
+  // We start at 00:00 branch time (queryDateStartUtc)
+  // We increment by slotStepMin
+  // We stop when start >= queryDateEndUtc (or slightly before, if we strictly want start to be in the day)
+  // Assuming we want all start times that belong to this calendar date.
   
   const availableSlots: TimeSlot[] = [];
+  let currentCursor = queryDateStartUtc;
 
-  // Create grid
-  // We align to slotStepMin (e.g. 00:00, 00:30, 01:00...)
-  // We'll start from the beginning of the day (00:00) until end (23:59)
-  // and checks validity.
-  
-  // Helper to round date to step
-  // But actually, we should respect the Shift start?
-  // Usually reservation systems have fixed grid (e.g. on the hour/half-hour).
-  
-  let currentCursor = queryDateStart;
-  const END_LIMIT = queryDateEnd;
+  // We loop until we pass the end of the "day" in branch time.
+  // Comparison should be done on timestamps or strict equality logic.
+  while (currentCursor <= queryDateEndUtc) { // allow 23:59 start? hardly, but sticking to logic.
+    // However, usually we stop if slotStart + duration > queryDateEnd? 
+    // Usually reservation systems allow booking 23:30 even if it ends 00:30 tomorrow.
+    // So currentCursor < addMinutes(queryDateEndUtc, 1) is fine.
+    
+    // Correction: `queryDateEndUtc` is 23:59:59.999.
+    // If currentCursor is 23:30 (and step 30), it fits.
+    // If currentCursor becomes 00:00 (next day), we stop.
+    
+    // Safety check just in case infinite loop
+    if (currentCursor.getTime() > queryDateEndUtc.getTime()) break;
 
-  while (currentCursor < END_LIMIT) {
     const slotStart = currentCursor;
     const slotEnd = addMinutes(slotStart, durationMin);
 
@@ -194,8 +170,8 @@ export async function listAvailableSlots({
         continue;
     }
 
-    // Check if ANY staff is free
-    const freeStaff = staffIds.find(sId => {
+    // Check availability
+    const freeStaff = staffIds.find((sId: string) => {
       return isStaffFree(sId, slotStart, slotEnd, shifts, breaks, timeOffs, bookings, holds);
     });
 

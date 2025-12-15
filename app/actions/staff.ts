@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client'
 import { createStaffSchema, createShiftSchema } from '@/lib/zod'
 import { revalidatePath } from 'next/cache'
 
-const prisma = new PrismaClient()
+import { prisma } from '@/lib/prisma'
 
 export async function getStaff(branchId: string) {
   return await prisma.staff.findMany({

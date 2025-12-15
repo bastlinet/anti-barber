@@ -20,20 +20,23 @@ vi.mock('./prisma', () => ({
 describe('listAvailableSlots', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2024-01-01T08:00:00Z')) // Set "now"
   })
 
-  it('should return slots for a simple shift', async () => {
+  it('should return slots correctly for Europe/Prague timezone', async () => {
     // Arrange
-    const date = '2026-01-01';
-    const startStr = '2026-01-01T10:00:00Z';
-    const endStr = '2026-01-01T14:00:00Z';
+    const date = '2024-01-02'; // Querying for Jan 2nd
+    // Branch in Prague (UTC+1 in winter)
+    // 10:00 local = 09:00 UTC
+    // 14:00 local = 13:00 UTC
     
     // Mocks
     vi.mocked(prisma.branch.findUnique).mockResolvedValue({
-      id: 'branch-1',
+      id: 'branch-cz',
       slotStepMin: 60,
       bookingBufferMin: 0,
-      timezone: 'UTC',
+      timezone: 'Europe/Prague',
     } as any)
 
     vi.mocked(prisma.service.findUnique).mockResolvedValue({
@@ -45,15 +48,17 @@ describe('listAvailableSlots', () => {
       { id: 'staff-1' }
     ] as any)
 
-    // Shift from 10:00 to 14:00
+    // Shift: 10:00 - 14:00 (Local Prague)
+    // In UTC (Jan 2): 09:00 - 13:00
     vi.mocked(prisma.shift.findMany).mockResolvedValue([
       {
         staffId: 'staff-1',
-        startAt: new Date(startStr),
-        endAt: new Date(endStr),
+        startAt: new Date('2024-01-02T09:00:00Z'), // 10:00 Prague
+        endAt: new Date('2024-01-02T13:00:00Z'),   // 14:00 Prague
       }
     ] as any)
 
+    // No conflicts
     vi.mocked(prisma.break.findMany).mockResolvedValue([])
     vi.mocked(prisma.timeOff.findMany).mockResolvedValue([])
     vi.mocked(prisma.booking.findMany).mockResolvedValue([])
@@ -61,73 +66,80 @@ describe('listAvailableSlots', () => {
 
     // Act
     const slots = await listAvailableSlots({
-      branchId: 'branch-1',
+      branchId: 'branch-cz',
       serviceId: 'service-1',
       date,
     })
 
     // Assert
-    // Expect 10:00, 11:00, 12:00, 13:00. (14:00 is end, so last slot is 13:00-14:00)
+    // Shift is 4 hours long: 10-14 local.
+    // Slots (60m): 10:00-11:00, 11:00-12:00, 12:00-13:00, 13:00-14:00.
+    // In UTC: 09:00, 10:00, 11:00, 12:00.
+    
     expect(slots).toHaveLength(4)
-    expect(slots[0].start).toContain('T10:00:00')
-    expect(slots[3].start).toContain('T13:00:00')
+    const startTimes = slots.map(s => s.start)
+    expect(startTimes).toContain('2024-01-02T09:00:00.000Z')
+    expect(startTimes).toContain('2024-01-02T12:00:00.000Z')
   })
 
-  it('should subtract bookings', async () => {
-    const date = '2026-01-01';
-    const startStr = '2026-01-01T10:00:00Z';
-    const endStr = '2026-01-01T14:00:00Z';
+  it('should filter out bookings', async () => {
+    const date = '2024-01-02';
     
     vi.mocked(prisma.branch.findUnique).mockResolvedValue({
-        id: 'branch-1',
-        slotStepMin: 60,
-        bookingBufferMin: 0,
-        timezone: 'UTC',
-      } as any)
-  
-      vi.mocked(prisma.service.findUnique).mockResolvedValue({
-        id: 'service-1',
-        durationMin: 60,
-      } as any)
-  
-      vi.mocked(prisma.staff.findMany).mockResolvedValue([
-        { id: 'staff-1' }
-      ] as any)
-  
-      // Shift from 10:00 to 14:00
-      vi.mocked(prisma.shift.findMany).mockResolvedValue([
-        {
-          staffId: 'staff-1',
-          startAt: new Date(startStr),
-          endAt: new Date(endStr),
-        }
-      ] as any)
+      id: 'branch-cz',
+      slotStepMin: 60,
+      bookingBufferMin: 0,
+      timezone: 'Europe/Prague',
+    } as any)
 
-    // Booking at 11:00-12:00
-    vi.mocked(prisma.booking.findMany).mockResolvedValue([
+    vi.mocked(prisma.service.findUnique).mockResolvedValue({
+      id: 'service-1',
+      durationMin: 60,
+    } as any)
+
+    vi.mocked(prisma.staff.findMany).mockResolvedValue([
+      { id: 'staff-1' }
+    ] as any)
+
+    // Shift: 10:00 - 14:00 Local (09:00 - 13:00 UTC)
+    vi.mocked(prisma.shift.findMany).mockResolvedValue([
       {
         staffId: 'staff-1',
-        startAt: new Date('2026-01-01T11:00:00Z'),
-        endAt: new Date('2026-01-01T12:00:00Z'),
+        startAt: new Date('2024-01-02T09:00:00Z'),
+        endAt: new Date('2024-01-02T13:00:00Z'),
       }
     ] as any)
 
+    // Booking: 11:00 - 12:00 Local (10:00 - 11:00 UTC)
+    vi.mocked(prisma.booking.findMany).mockResolvedValue([
+      {
+        staffId: 'staff-1',
+        startAt: new Date('2024-01-02T10:00:00Z'),
+        endAt: new Date('2024-01-02T11:00:00Z'),
+      }
+    ] as any)
+    
     vi.mocked(prisma.break.findMany).mockResolvedValue([])
     vi.mocked(prisma.timeOff.findMany).mockResolvedValue([])
     vi.mocked(prisma.bookingHold.findMany).mockResolvedValue([])
 
     const slots = await listAvailableSlots({
-      branchId: 'branch-1',
+      branchId: 'branch-cz',
       serviceId: 'service-1',
       date,
     })
 
-    // Expect 10:00, 12:00, 13:00 (11:00 is booked)
-    expect(slots).toHaveLength(3)
-    const times = slots.map(s => parseISO(s.start).toISOString())
+    // Expected: 10:00, [11:00 occupied], 12:00, 13:00
+    // UTC: 09:00, 11:00, 12:00
+    // Wait, the shift ends at 14:00 local (13:00 UTC).
+    // Slots: 10-11, 11-12, 12-13, 13-14.
+    // Occupied: 11-12.
+    // Remaining: 10-11, 12-13, 13-14.
+    // UTC Starts: 09:00, 11:00, 12:00.
     
-    expect(times).toContain(new Date('2026-01-01T10:00:00Z').toISOString())
-    expect(times).not.toContain(new Date('2026-01-01T11:00:00Z').toISOString())
-    expect(times).toContain(new Date('2026-01-01T12:00:00Z').toISOString())
+    expect(slots).toHaveLength(3)
+    expect(slots.map(s => s.start)).toContain('2024-01-02T09:00:00.000Z')
+    expect(slots.map(s => s.start)).not.toContain('2024-01-02T10:00:00.000Z') // 11:00 local occupied
+    expect(slots.map(s => s.start)).toContain('2024-01-02T11:00:00.000Z')
   })
 })
