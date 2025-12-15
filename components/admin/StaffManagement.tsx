@@ -2,9 +2,31 @@
 
 import { useState } from "react";
 import { createStaff, toggleStaffActive } from "@/app/admin/actions";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Plus } from "lucide-react";
 
 export default function StaffManagement({ staff, branches }: { staff: any[], branches: any[] }) {
-  const [isAdding, setIsAdding] = useState(false);
+  const [open, setOpen] = useState(false);
   
   async function handleSubmit(formData: FormData) {
     const name = formData.get("name") as string;
@@ -13,72 +35,99 @@ export default function StaffManagement({ staff, branches }: { staff: any[], bra
     const phone = formData.get("phone") as string;
     
     await createStaff({ name, branchId, email, phone });
-    setIsAdding(false);
+    setOpen(false);
   }
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Správa zaměstnanců</h1>
-        <button onClick={() => setIsAdding(!isAdding)} className="bg-black text-white px-4 py-2 rounded">
-            {isAdding ? "Zavřít" : "Přidat zaměstnance"}
-        </button>
-      </div>
-
-      {isAdding && (
-          <div className="bg-gray-100 p-4 rounded mb-6 border">
-              <h3 className="font-bold mb-2">Nový zaměstnanec</h3>
-              <form action={handleSubmit} className="grid gap-4 max-w-md">
-                  <input name="name" placeholder="Jméno" required className="p-2 border rounded" />
-                  <input name="email" placeholder="Email (pro login)" className="p-2 border rounded" />
-                  <input name="phone" placeholder="Telefon" className="p-2 border rounded" />
-                  <select name="branchId" className="p-2 border rounded" required>
-                      {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                  </select>
-                  <button type="submit" className="bg-green-600 text-white p-2 rounded">Uložit</button>
-              </form>
-          </div>
-      )}
-
-      <div className="bg-white rounded shadow">
-          <table className="w-full text-left border-collapse">
-              <thead>
-                  <tr className="border-b bg-gray-50">
-                      <th className="p-4">Jméno</th>
-                      <th className="p-4">Email / Telefon</th>
-                      <th className="p-4">Pobočka</th>
-                      <th className="p-4">Stav</th>
-                      <th className="p-4">Akce</th>
-                  </tr>
-              </thead>
-              <tbody>
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Správa zaměstnanců</CardTitle>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm"><Plus size={16} className="mr-2"/> Přidat zaměstnance</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Nový zaměstnanec</DialogTitle>
+              <DialogDescription>
+                Vytvořte profil nového zaměstnance.
+              </DialogDescription>
+            </DialogHeader>
+            <form action={handleSubmit} className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Input name="name" placeholder="Jméno a příjmení" required />
+              </div>
+              <div className="grid gap-2">
+                <Input name="email" placeholder="Email" type="email" />
+              </div>
+              <div className="grid gap-2">
+                <Input name="phone" placeholder="Telefon" />
+              </div>
+              <div className="grid gap-2">
+                <Select name="branchId" required>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Vyberte pobočku" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map(b => (
+                      <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <DialogFooter>
+                <Button type="submit">Uložit</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </CardHeader>
+      <CardContent>
+          <Table>
+              <TableHeader>
+                  <TableRow>
+                      <TableHead>Jméno</TableHead>
+                      <TableHead>Kontakt</TableHead>
+                      <TableHead>Pobočka</TableHead>
+                      <TableHead>Stav</TableHead>
+                      <TableHead>Akce</TableHead>
+                  </TableRow>
+              </TableHeader>
+              <TableBody>
                   {staff.map(s => (
-                      <tr key={s.id} className="border-b hover:bg-gray-50">
-                          <td className="p-4 font-medium">{s.name}</td>
-                          <td className="p-4 text-sm text-gray-500">
-                              <div>{s.email}</div>
-                              <div>{s.phone}</div>
-                          </td>
-                          <td className="p-4">{branches.find(b => b.id === s.branchId)?.name}</td>
-                          <td className="p-4">
-                              <span className={`px-2 py-1 rounded text-xs ${s.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      <TableRow key={s.id}>
+                          <TableCell className="font-medium">{s.name}</TableCell>
+                          <TableCell>
+                              <div className="flex flex-col text-sm text-muted-foreground">
+                                <span>{s.email}</span>
+                                <span>{s.phone}</span>
+                              </div>
+                          </TableCell>
+                          <TableCell>{branches.find(b => b.id === s.branchId)?.name}</TableCell>
+                          <TableCell>
+                              <Badge variant={s.active ? "default" : "destructive"}>
                                   {s.active ? "Aktivní" : "Neaktivní"}
-                              </span>
-                          </td>
-                          <td className="p-4">
-                              <button 
+                              </Badge>
+                          </TableCell>
+                          <TableCell>
+                              <Button 
+                                variant="link" 
+                                size="sm"
                                 onClick={() => toggleStaffActive(s.id, !s.active)}
-                                className="text-sm underline text-blue-600"
                               >
                                   {s.active ? "Deaktivovat" : "Aktivovat"}
-                              </button>
-                          </td>
-                      </tr>
+                              </Button>
+                          </TableCell>
+                      </TableRow>
                   ))}
-                  {staff.length === 0 && <tr><td colSpan={5} className="p-4 text-center text-gray-500">Žádní zaměstnanci</td></tr>}
-              </tbody>
-          </table>
-      </div>
-    </div>
+                  {staff.length === 0 && (
+                      <TableRow>
+                          <TableCell colSpan={5} className="text-center text-muted-foreground h-24">Žádní zaměstnanci</TableCell>
+                      </TableRow>
+                  )}
+              </TableBody>
+          </Table>
+      </CardContent>
+    </Card>
   );
 }

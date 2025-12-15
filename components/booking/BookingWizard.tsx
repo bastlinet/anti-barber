@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { format, addDays, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 // Types
 type Service = { id: string; name: string; durationMin: number; priceCents: number; category: string };
@@ -176,80 +180,93 @@ export default function BookingWizard() {
   };
 
   if (step === Step.SUCCESS) {
-     return <div className="p-4 text-center text-green-600">
-        <h2 className="text-2xl font-bold">Rezervace potvrzena!</h2>
-        <p>ID: {bookingResult?.bookingId}</p>
-        <button onClick={() => window.location.reload()} className="mt-4 underline">Nová rezervace</button>
-     </div>
+     return (
+        <CardContent className="p-8 text-center space-y-4">
+             <div className="text-green-500 font-bold text-2xl">Rezervace potvrzena!</div>
+             <p className="text-muted-foreground">ID: {bookingResult?.bookingId}</p>
+             <p>Na váš email dorazilo potvrzení.</p>
+             <Button onClick={() => window.location.reload()} variant="outline">Nová rezervace</Button>
+        </CardContent>
+     )
   }
 
   return (
-    <div className="max-w-md mx-auto p-4 border rounded shadow-md bg-white min-h-[400px] text-black">
-      {error && <div className="text-red-500 mb-2">{error}</div>}
+    <div className="w-full">
+      <CardHeader>
+        <CardTitle className="text-xl">
+            {step === Step.SELECT_SERVICE && "Vyberte službu"}
+            {step === Step.SELECT_STAFF && "Vyberte barbera"}
+            {step === Step.SELECT_DATE && "Vyberte termín"}
+            {step === Step.CONTACT && "Vaše údaje"}
+        </CardTitle>
+        {error && <div className="text-destructive text-sm font-medium">{error}</div>}
+      </CardHeader>
       
-      {/* Header */}
-      <h2 className="text-xl font-bold mb-4">
-        {step === Step.SELECT_SERVICE && "Vyberte službu"}
-        {step === Step.SELECT_STAFF && "Vyberte barbera"}
-        {step === Step.SELECT_DATE && "Vyberte termín"}
-        {step === Step.CONTACT && "Vaše údaje"}
-      </h2>
-
+      <CardContent>
       {/* Logic */}
       {step === Step.SELECT_SERVICE && (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
             {services.map(s => (
-                <button key={s.id} onClick={() => handleServiceSelect(s)} className="p-3 border rounded hover:bg-gray-50 text-left w-full text-black">
-                    <div className="font-bold">{s.name}</div>
-                    <div className="text-sm text-gray-600">{s.durationMin} min • {s.priceCents / 100} Kč</div>
-                </button>
+                <Button key={s.id} variant="outline" onClick={() => handleServiceSelect(s)} className="h-auto p-4 justify-start flex-col items-start space-y-1">
+                    <div className="font-bold text-lg">{s.name}</div>
+                    <div className="text-sm text-muted-foreground">{s.durationMin} min • {s.priceCents / 100} Kč</div>
+                </Button>
             ))}
-            {services.length === 0 && <p>Načítám služby...</p>}
+            {services.length === 0 && <p className="text-muted-foreground">Načítám služby...</p>}
         </div>
       )}
 
       {step === Step.SELECT_STAFF && (
-        <div className="flex flex-col gap-2">
-            <button onClick={() => handleStaffSelect(null)} className="p-3 border rounded hover:bg-gray-50 text-left text-black">
+        <div className="flex flex-col gap-3">
+            <Button variant="outline" onClick={() => handleStaffSelect(null)} className="h-auto p-4 justify-start text-lg">
                 Kdokoliv (nejdřívější termín)
-            </button>
+            </Button>
             {staffList.map(s => (
-                 <button key={s.id} onClick={() => handleStaffSelect(s.id)} className="p-3 border rounded hover:bg-gray-50 text-left text-black">
+                 <Button key={s.id} variant="outline" onClick={() => handleStaffSelect(s.id)} className="h-auto p-4 justify-start text-lg">
                     {s.name}
-                 </button>
+                 </Button>
             ))}
         </div>
       )}
 
       {step === Step.SELECT_DATE && (
-        <div>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="mb-4 p-2 border w-full text-black" />
-            <div className="grid grid-cols-3 gap-2">
-                {loading && <p className="text-black">Hledám termíny...</p>}
-                {!loading && slots.length === 0 && <p className="col-span-3 text-center text-black">Žádné volné termíny.</p>}
+        <div className="space-y-4">
+            <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full" />
+            
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {loading && <p className="col-span-3 text-muted-foreground">Hledám termíny...</p>}
+                {!loading && slots.length === 0 && <p className="col-span-3 text-center text-muted-foreground">Žádné volné termíny.</p>}
                 {slots.map(slot => (
-                    <button key={slot.start} onClick={() => handleSlotSelect(slot)} className="p-2 border rounded bg-green-50 hover:bg-green-100 text-sm text-black">
+                    <Button key={slot.start} variant="outline" onClick={() => handleSlotSelect(slot)} className="text-sm">
                         {format(parseISO(slot.start), 'HH:mm')}
-                    </button>
+                    </Button>
                 ))}
             </div>
-            <button onClick={() => setStep(Step.SELECT_STAFF)} className="mt-4 text-sm text-gray-500 underline">Zpět</button>
         </div>
       )}
 
       {step === Step.CONTACT && (
-        <div className="flex flex-col gap-3">
-             <input placeholder="Jméno" className="p-2 border text-black placeholder-gray-500" value={contact.name} onChange={e => setContact({...contact, name: e.target.value})} />
-             <input placeholder="Email" className="p-2 border text-black placeholder-gray-500" value={contact.email} onChange={e => setContact({...contact, email: e.target.value})} />
-             <input placeholder="Telefon" className="p-2 border text-black placeholder-gray-500" value={contact.phone} onChange={e => setContact({...contact, phone: e.target.value})} />
-             <textarea placeholder="Poznámka (nepovinné)" className="p-2 border text-black placeholder-gray-500" value={contact.note} onChange={e => setContact({...contact, note: e.target.value})} />
+        <div className="flex flex-col gap-4">
+             <Input placeholder="Jméno" value={contact.name} onChange={e => setContact({...contact, name: e.target.value})} />
+             <Input placeholder="Email" value={contact.email} onChange={e => setContact({...contact, email: e.target.value})} />
+             <Input placeholder="Telefon" value={contact.phone} onChange={e => setContact({...contact, phone: e.target.value})} />
+             <Input placeholder="Poznámka (nepovinné)" value={contact.note} onChange={e => setContact({...contact, note: e.target.value})} />
              
-             <button disabled={loading} onClick={handleConfirm} className="bg-black text-white p-3 rounded mt-2 disabled:opacity-50">
+             <Button disabled={loading} onClick={handleConfirm} size="lg" className="w-full mt-4">
                 {loading ? "Potvrzuji..." : "Rezervovat závazně"}
-             </button>
-             <button onClick={() => setStep(Step.SELECT_DATE)} className="text-sm text-gray-500 underline">Zpět</button>
+             </Button>
         </div>
       )}
+      </CardContent>
+
+      <CardFooter className="justify-between">
+          {step > Step.SELECT_SERVICE && (
+              <Button variant="ghost" onClick={() => setStep(step - 1)}>Zpět</Button>
+          )}
+          <div className="text-xs text-muted-foreground ml-auto">
+              Krok {step + 1} z 4
+          </div>
+      </CardFooter>
 
     </div>
   );

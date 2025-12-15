@@ -3,7 +3,19 @@
 import { useEffect, useState } from "react";
 import { format, parseISO, differenceInMinutes, addMinutes, startOfDay, addHours } from "date-fns";
 import { getCalendarData } from "@/app/admin/calendar/actions";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, User, Plus } from "lucide-react";
+import { createShift, deleteShift, cancelBooking } from "@/app/admin/actions";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 
 export default function CalendarDayView() {
   const [date, setDate] = useState<Date | null>(null);
@@ -50,7 +62,6 @@ export default function CalendarDayView() {
       e.stopPropagation();
       if (mode === "shifts") {
           if (confirm("Smazat směnu?")) {
-               const { deleteShift } = await import("@/app/admin/actions");
                await deleteShift(shift.id);
                setDate(new Date(date!)); 
           }
@@ -59,9 +70,6 @@ export default function CalendarDayView() {
 
   const handleCellClick = (staffId: string, time: Date) => {
       if (mode === "shifts") {
-          // Open add shift modal or direct action
-          // For simplicity, let's just add a 8h shift starting at clicked time? No, let's open prompt or modal.
-          // Let's use simple prompt for MVP or default 4h shift.
           setIsAddingShift({ staffId, time });
       }
   }
@@ -71,11 +79,9 @@ export default function CalendarDayView() {
       const { staffId, time } = isAddingShift;
       const startAt = time;
       const endAt = addHours(startAt, hours);
-      // We need branchId. The staff object in 'data.staff' has branchId.
       const staffMember = staff.find((s: any) => s.id === staffId);
       if (!staffMember) return;
       
-      const { createShift } = await import("@/app/admin/actions");
       await createShift(staffId, staffMember.branchId, startAt, endAt);
       setDate(new Date(date!));
       setIsAddingShift(null);
@@ -89,92 +95,113 @@ export default function CalendarDayView() {
   const handleCancelBooking = async () => {
     if (!selectedBooking) return;
     if (confirm("Opravdu zrušit rezervaci?")) {
-        const { cancelBooking } = await import("@/app/admin/actions");
         await cancelBooking(selectedBooking.id);
         setLoading(true); // Trigger reload
-        // Ideally we would optimistically update or just re-fetch
         setDate(new Date(date!)); // Force effect re-run
         handleCloseModal();
     }
   };
 
-  if (loading || !date) return <div>Načítám kalendář...</div>;
-  if (!data) return <div>Žádná data</div>;
+  if (loading || !date) return <div className="p-8 text-muted-foreground">Načítám kalendář...</div>;
+  if (!data) return <div className="p-8 text-muted-foreground">Žádná data</div>;
 
   const { staff, bookings } = data;
 
-
-
   return (
-    <div className="flex flex-col h-full bg-white border rounded relative">
-      {/* Modal */}
-      {selectedBooking && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50">
-              <div className="bg-white p-6 rounded shadow-lg min-w-[300px]">
-                  <h3 className="text-lg font-bold mb-2">Detail rezervace</h3>
-                  <p><strong>Klient:</strong> {selectedBooking.customerName}</p>
-                  <p><strong>Email:</strong> {selectedBooking.customerEmail}</p>
-                  <p><strong>Tel:</strong> {selectedBooking.customerPhone}</p>
-                  <p><strong>Služba:</strong> {selectedBooking.service?.name}</p>
-                  <p className="mt-2 text-sm text-gray-500">{selectedBooking.note}</p>
-                  
-                  <div className="mt-4 flex gap-2 justify-end">
-                      <button onClick={handleCancelBooking} className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">Zrušit</button>
-                      <button onClick={handleCloseModal} className="bg-gray-200 text-black px-3 py-1 rounded hover:bg-gray-300">Zavřít</button>
-                  </div>
-              </div>
-          </div>
-      )}
+    <div className="flex flex-col h-full border rounded-lg bg-background relative overflow-hidden shadow-sm">
+      {/* Booking Detail Modal */}
+      <Dialog open={!!selectedBooking} onOpenChange={(open) => !open && handleCloseModal()}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Detail rezervace</DialogTitle>
+                <DialogDescription>Informace o rezervovaném termínu.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-4">
+                 <div className="grid grid-cols-3 gap-4">
+                     <div className="font-semibold text-right">Klient</div>
+                     <div className="col-span-2">{selectedBooking?.customerName}</div>
+                 </div>
+                 <div className="grid grid-cols-3 gap-4">
+                     <div className="font-semibold text-right">Email</div>
+                     <div className="col-span-2 text-sm text-muted-foreground">{selectedBooking?.customerEmail}</div>
+                 </div>
+                 <div className="grid grid-cols-3 gap-4">
+                     <div className="font-semibold text-right">Telefon</div>
+                     <div className="col-span-2 text-sm text-muted-foreground">{selectedBooking?.customerPhone}</div>
+                 </div>
+                 <div className="grid grid-cols-3 gap-4">
+                     <div className="font-semibold text-right">Služba</div>
+                     <div className="col-span-2">{selectedBooking?.service?.name}</div>
+                 </div>
+                 {selectedBooking?.note && (
+                     <div className="grid grid-cols-3 gap-4 bg-muted p-2 rounded">
+                         <div className="font-semibold text-right">Poznámka</div>
+                         <div className="col-span-2 text-sm italic">{selectedBooking.note}</div>
+                     </div>
+                 )}
+            </div>
+            <DialogFooter className="gap-2 sm:justify-between">
+                <Button variant="destructive" onClick={handleCancelBooking}>Zrušit rezervaci</Button>
+                <Button variant="outline" onClick={handleCloseModal}>Zavřít</Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {/* Shift Modal */}
-      {isAddingShift && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50">
-              <div className="bg-white p-6 rounded shadow-lg min-w-[300px]">
-                  <h3 className="text-lg font-bold mb-4">Nová směna</h3>
-                  <p className="mb-4">
-                      Začátek: {format(isAddingShift.time, "HH:mm")}
-                  </p>
-                  <div className="flex gap-2 mb-4">
-                       <button onClick={() => confirmAddShift(4)} className="bg-gray-100 p-2 rounded hover:bg-gray-200">+4h</button>
-                       <button onClick={() => confirmAddShift(8)} className="bg-gray-100 p-2 rounded hover:bg-gray-200">+8h</button>
-                       <button onClick={() => confirmAddShift(12)} className="bg-gray-100 p-2 rounded hover:bg-gray-200">+12h</button>
-                  </div>
-                  <button onClick={handleCloseModal} className="text-gray-500 underline text-sm w-full text-center">Zrušit</button>
-              </div>
-          </div>
-      )}
+      {/* Adding Shift Modal */}
+       <Dialog open={!!isAddingShift} onOpenChange={(open) => !open && handleCloseModal()}>
+        <DialogContent className="sm:max-w-xs">
+            <DialogHeader>
+                <DialogTitle>Nová směna</DialogTitle>
+                <DialogDescription>
+                   {isAddingShift && <>Začátek: {format(isAddingShift.time, "HH:mm")}</>}
+                </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-2 py-4">
+                 <Button onClick={() => confirmAddShift(4)} variant="outline" className="justify-start"><Plus size={16} className="mr-2"/> Přidat 4 hodiny</Button>
+                 <Button onClick={() => confirmAddShift(8)} variant="outline" className="justify-start"><Plus size={16} className="mr-2"/> Přidat 8 hodin</Button>
+                 <Button onClick={() => confirmAddShift(12)} variant="outline" className="justify-start"><Plus size={16} className="mr-2"/> Přidat 12 hodin</Button>
+            </div>
+            <DialogFooter>
+                <Button variant="ghost" onClick={handleCloseModal}>Zrušit</Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {/* Header Controls */}
-      <div className="flex items-center justify-between p-4 border-b">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between p-4 border-b bg-muted/10">
         <div className="flex gap-2 items-center">
-            <button onClick={handlePrevDay} className="p-2 border rounded hover:bg-gray-50"><ChevronLeft size={20} /></button>
-            <h2 className="text-xl font-bold min-w-[150px] text-center">{date ? format(date, "d. MMMM yyyy") : "..."}</h2>
-            <button onClick={handleNextDay} className="p-2 border rounded hover:bg-gray-50"><ChevronRight size={20} /></button>
+            <Button variant="outline" size="icon" onClick={handlePrevDay}><ChevronLeft size={20} /></Button>
+            <h2 className="text-lg font-bold min-w-[150px] text-center">{date ? format(date, "d. MMMM yyyy") : "..."}</h2>
+            <Button variant="outline" size="icon" onClick={handleNextDay}><ChevronRight size={20} /></Button>
         </div>
         
-        <div className="bg-gray-100 p-1 rounded flex gap-1 text-sm">
-            <button 
+        <div className="flex gap-1 bg-muted p-1 rounded-lg">
+            <Button 
+                variant={mode === "bookings" ? "default" : "ghost"} 
+                size="sm"
                 onClick={() => setMode("bookings")}
-                className={`px-3 py-1 rounded ${mode === "bookings" ? "bg-white shadow text-black" : "text-gray-500"}`}
+                className="h-8 shadow-none"
             >
                 Rezervace
-            </button>
-            <button 
+            </Button>
+            <Button 
+                variant={mode === "shifts" ? "default" : "ghost"} 
+                size="sm"
                 onClick={() => setMode("shifts")}
-                className={`px-3 py-1 rounded ${mode === "shifts" ? "bg-white shadow text-black" : "text-gray-500"}`}
+                className="h-8 shadow-none"
             >
                 Směny
-            </button>
+            </Button>
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-auto">
+      <div className="flex flex-1 overflow-auto bg-white/50">
          {/* Time Axis */}
-         <div className="w-16 flex-shrink-0 border-r bg-gray-50">
+         <div className="w-14 flex-shrink-0 border-r bg-muted/10">
             {Array.from({ length: endHour - startHour + 1 }).map((_, i) => {
                 const hour = startHour + i;
                 return (
-                    <div key={hour} className="h-[120px] text-xs text-center border-b pt-2 text-gray-400 relative">
+                    <div key={hour} className="h-[120px] text-xs text-center border-b border-border/50 pt-2 text-muted-foreground relative font-medium">
                         {hour}:00
                     </div>
                 );
@@ -182,23 +209,21 @@ export default function CalendarDayView() {
          </div>
 
          {/* Staff Columns */}
-         <div className="flex-1 flex min-w-[600px]">
+         <div className="flex-1 flex min-w-[600px] divide-x divide-border">
             {staff.map((s) => (
-                <div key={s.id} className="flex-1 border-r min-w-[150px] relative">
+                <div key={s.id} className="flex-1 min-w-[150px] relative">
                     {/* Header Name */}
-                    <div className="h-10 border-b flex items-center justify-center font-bold bg-gray-50 sticky top-0 z-10">
+                    <div className="h-10 border-b flex items-center justify-center font-bold bg-muted/5 sticky top-0 z-10 backdrop-blur-sm shadow-sm gap-2">
+                        <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs text-primary">{s.name.charAt(0)}</div>
                         {s.name}
                     </div>
                     
                     {/* Render Shifts (Background) */}
-                    <div className="relative h-[1440px]" style={{ height: totalMinutes * pixelsPerMinute }}
+                    <div className="relative h-[1440px] bg-background" style={{ height: totalMinutes * pixelsPerMinute }}
                          onClick={(e) => {
-                            // Find click time relative to column top
                             const rect = e.currentTarget.getBoundingClientRect();
                             const y = e.clientY - rect.top;
                             const minutes = y / pixelsPerMinute;
-                            const clickTime = addMinutes(addHours(startOfDay(date!), startHour), minutes);
-                            
                             // Snap to 30 mins
                             const roundedMinutes = Math.floor(minutes / 30) * 30;
                             const snappedTime = addMinutes(addHours(startOfDay(date!), startHour), roundedMinutes);
@@ -206,30 +231,30 @@ export default function CalendarDayView() {
                             handleCellClick(s.id, snappedTime);
                          }}
                     >
+                         {/* Shifts */}
                          {s.shifts.map((shift: any) => {
                              const shiftStart = ensureDate(shift.startAt);
                              const shiftEnd = ensureDate(shift.endAt);
                              const dayStart = addHours(startOfDay(date!), startHour);
                              
-                             // Calculate top and height relative to startHour
                              const startOffset = Math.max(0, differenceInMinutes(shiftStart, dayStart));
                              const duration = differenceInMinutes(shiftEnd, shiftStart);
                              
                              return (
                                  <div key={shift.id} 
                                       onClick={(e) => handleShiftClick(e, shift)}
-                                      className={`absolute w-full border-l-4 pointer-events-auto cursor-pointer ${mode === "shifts" ? "bg-green-100 border-green-500 ring-2 ring-green-500 z-30" : "bg-green-50/50 border-green-200"}`}
+                                      className={`absolute w-full border-l-4 pointer-events-auto cursor-pointer transition-colors ${mode === "shifts" ? "bg-green-100/80 border-green-500 hover:bg-green-200 z-30" : "bg-green-50/30 border-green-200/50"}`}
                                       style={{ 
                                           top: startOffset * pixelsPerMinute, 
                                           height: duration * pixelsPerMinute 
                                       }}
                                  >
-                                    {mode === "shifts" && <span className="text-xs p-1 text-green-700">× Smazat</span>}
+                                    {mode === "shifts" && <span className="absolute top-1 right-1 text-xs px-1.5 py-0.5 bg-white/50 rounded-full text-green-700 font-bold hover:bg-white hover:text-red-600 transition-colors">×</span>}
                                  </div>
                              );
                          })}
 
-                         {/* Render Bookings */}
+                         {/* Bookings */}
                          {bookings
                              .filter((b: any) => b.staffId === s.id)
                              .map((b: any) => {
@@ -240,24 +265,26 @@ export default function CalendarDayView() {
                                  const top = differenceInMinutes(bStart, dayStart) * pixelsPerMinute;
                                  const height = differenceInMinutes(bEnd, bStart) * pixelsPerMinute;
 
-                                 if (top < 0) return null; // Started before 8:00 (handle better next time)
+                                 if (top < 0) return null;
 
                                  return (
-                                     <button key={b.id}
+                                     <Card key={b.id}
                                           onClick={(e) => handleBookingClick(e, b)}
-                                          className={`absolute left-1 right-1 bg-blue-500 text-white rounded p-1 text-xs overflow-hidden shadow-sm hover:brightness-110 text-left z-20 ${mode === "shifts" ? "opacity-30 pointer-events-none" : ""}`}
-                                          style={{ top, height }}
+                                          className={`absolute left-1 right-1 p-2 rounded-md shadow-sm border-l-4 overflow-hidden cursor-pointer transition-all hover:shadow-md z-20 ${
+                                              mode === "shifts" ? "opacity-30 pointer-events-none grayscale" : "bg-primary/10 border-l-primary hover:bg-primary/20"
+                                          }`}
+                                          style={{ top, height, borderRadius: 4 }}
                                      >
-                                        <div className="font-bold pointer-events-none">{format(bStart, "HH:mm")} - {b.service?.name}</div>
-                                        <div className="pointer-events-none">{b.customerName}</div>
-                                     </button>
+                                        <div className="font-bold text-xs truncate leading-tight">{format(bStart, "HH:mm")} - {b.service?.name}</div>
+                                        <div className="text-xs truncate text-muted-foreground mt-0.5">{b.customerName}</div>
+                                     </Card>
                                  )
                              })
                          }
                     </div>
                 </div>
             ))}
-             {staff.length === 0 && <div className="p-4 text-gray-400">Žádní zaměstnanci k zobrazení.</div>}
+             {staff.length === 0 && <div className="p-8 text-center w-full text-muted-foreground">Žádní zaměstnanci k zobrazení.</div>}
          </div>
       </div>
     </div>
