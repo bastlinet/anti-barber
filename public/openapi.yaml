@@ -1,0 +1,297 @@
+openapi: 3.0.0
+info:
+  title: Antigravity Barber API
+  version: 1.0.0
+  description: Public API for the Barber Reservation System
+servers:
+  - url: /api
+    description: Internal API routes
+paths:
+  /availability:
+    get:
+      summary: List available booking slots
+      parameters:
+        - in: query
+          name: branchId
+          schema:
+            type: string
+            format: uuid
+          required: true
+        - in: query
+          name: serviceId
+          schema:
+            type: string
+            format: uuid
+          required: true
+        - in: query
+          name: date
+          schema:
+            type: string
+            format: date
+            example: "2023-12-25"
+          required: true
+          description: Format YYYY-MM-DD
+        - in: query
+          name: staffId
+          schema:
+            type: string
+            format: uuid
+          required: false
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  slots:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        start:
+                          type: string
+                          format: date-time
+                        end:
+                          type: string
+                          format: date-time
+        '400':
+          description: Invalid query parameters
+        '500':
+          description: Internal Server Error
+
+  /branches:
+    get:
+      summary: List all branches
+      responses:
+        '200':
+          description: List of branches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Branch'
+        '500':
+          description: Server error
+
+  /branches/{slug}:
+    get:
+      summary: Get details of a specific branch
+      parameters:
+        - in: path
+          name: slug
+          schema:
+            type: string
+          required: true
+      responses:
+        '200':
+          description: Branch details
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Branch'
+                  - type: object
+                    properties:
+                      services:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            service:
+                              $ref: '#/components/schemas/Service'
+        '404':
+          description: Branch not found
+        '500':
+          description: Server error
+
+  /services:
+    get:
+      summary: List services
+      parameters:
+        - in: query
+          name: branchId
+          schema:
+            type: string
+            format: uuid
+          required: false
+          description: Optional branch ID to filter services and get branch-specific pricing
+      responses:
+        '200':
+          description: List of services
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Service'
+        '500':
+          description: Server error
+
+  /booking/hold:
+    post:
+      summary: Hold a booking slot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - branchId
+                - serviceId
+                - staffId
+                - startAt
+                - date
+              properties:
+                branchId:
+                  type: string
+                  format: uuid
+                serviceId:
+                  type: string
+                  format: uuid
+                staffId:
+                  type: string
+                  format: uuid
+                startAt:
+                  type: string
+                  format: date-time
+                date:
+                  type: string
+                  format: date
+                  description: "YYYY-MM-DD"
+      responses:
+        '200':
+          description: Hold created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  holdId:
+                    type: string
+                    format: uuid
+                  expiresAt:
+                    type: string
+                    format: date-time
+        '400':
+          description: Invalid request
+        '409':
+          description: Slot is no longer available
+        '500':
+          description: Server error
+
+  /booking/confirm:
+    post:
+      summary: Confirm a held booking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - holdId
+                - customerName
+                - customerEmail
+                - customerPhone
+              properties:
+                holdId:
+                  type: string
+                  format: uuid
+                customerName:
+                  type: string
+                customerEmail:
+                  type: string
+                  format: email
+                customerPhone:
+                  type: string
+                note:
+                  type: string
+      responses:
+        '200':
+          description: Booking confirmed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bookingId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    example: CONFIRMED
+        '400':
+          description: Invalid request
+        '404':
+          description: Hold not found or expired
+        '500':
+          description: Server error
+
+components:
+  schemas:
+    Branch:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        website:
+          type: string
+        timezone:
+          type: string
+        bookingBufferMin:
+          type: integer
+        slotStepMin:
+          type: integer
+        maxDaysAhead:
+          type: integer
+        allowPayOnSite:
+          type: boolean
+        allowPayOnline:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Service:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        category:
+          type: string
+        durationMin:
+          type: integer
+        description:
+          type: string
+          nullable: true
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
